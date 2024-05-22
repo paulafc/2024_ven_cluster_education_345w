@@ -1,3 +1,12 @@
+# function to remote special caracters, spaces, comma, dot,etc from location name
+data_name_tolower_remove_space_dots <- function(data, data.name) {
+  data <- data %>%
+    mutate(name_check = str_to_lower(str_trim(str_replace_all(!!sym(data.name), "\\s+|\\.|-|\\(|\\)|\\[]|,|:|º|°", ""))))
+  data$name_check<-stringi::stri_trans_general(data$name_check, "Latin-ASCII")
+  return(data)
+}
+
+
 # Function to calculate sum based on specified activity, aggregation, and targets to summarize
 calculate_sum <- function(data, activity, aggregation, targets_summarise){
   # Filter data based on activity if it is not 'none'
@@ -126,6 +135,9 @@ calculate_percentage_target <- function(data, adm.level){
 
 
 # VARIABLES ---------------------------------------------------------------
+# AoR or Cluster
+col.sector <- '#sector'
+
 # Administrative Levels
 adm0 <- c("#adm0+name", "#adm0+code")
 adm1 <- c("#adm1+code", "#adm1+name")
@@ -138,6 +150,8 @@ adm.level <- list(adm1, adm12, adm123)
 
 # Location Identifier
 location <- "#location"
+col.location <- "#location"
+col.location.type <- "#location+type"
 adm.school <- c('#adm4+name', '#adm4+code')
 col.loc.type <- "#location+type"
 
@@ -156,6 +170,7 @@ col.reach.disagg <- c('#reached','#reached+f+children+age0_2', '#reached+m+child
                       '#reached+f+adult+age20_59', '#reached+m+adult+age20_59',	'#reached+f+elderly+age60_',	'#reached+m+elderly+age60_')
 
 # Age variables
+age.0.2<- c('#reached+f+children+age0_2', '#reached+m+children+age0_2')
 age.3.5<-c('#reached+f+children+age3_5',	'#reached+m+children+age3_5')
 age.6.11 <- c('#reached+f+children+age6_11', '#reached+m+children+age6_11')
 age.12.17 <- c('#reached+f+children+age12_17', '#reached+m+children+age12_17')

@@ -16,8 +16,11 @@ data <- read.xlsx(xlsxFile = paste0(folder,'/01_input/',file1), sheet ='Hoja-1',
 file2 <- "2024_clusters_education_indicadores.xlsx"
 indicators <- read.xlsx(xlsxFile = paste0(folder,'/01_input/',file2), sheet ='educacion', startRow = 1, fillMergedCells = TRUE, colNames = TRUE)
 
-output <- '2024_02_cluster_education_345w'
-output.ocha <- '2024_02_cluster_education_345w_ocha'
+file3 <- "desagregacion_label.xlsx"
+name_labels <- read.xlsx(xlsxFile = paste0(folder,'/01_input/',file3), startRow = 1, fillMergedCells = TRUE, colNames = TRUE)
+
+output <- '2024_04_cluster_education_345w'
+output.ocha <- '2024_04_cluster_education_345w_ocha'
 
 
 # SOURCES -----------------------------------------------------------------
@@ -35,8 +38,18 @@ indicators.list <- unique(indicators[c('indicator')])
 # Copy raw data
 df<-data
 
+# Identify columns with names equal to ""
+empty_columns <- colnames(df) == ""
+# Rename columns
+colnames(df)[empty_columns] <- c('#date+reported', "created_by")
+
 # Remove special character or accent
 df[col.validated]<-iconv(df[[col.validated]],from="UTF-8",to="ASCII//TRANSLIT")
+df[col.sector]<-iconv(df[[col.sector]],from="UTF-8",to="ASCII//TRANSLIT")
+
+# filter by sector
+df <- df %>% 
+  filter(tolower(!!sym(col.sector)) == 'educacion')
 
 # Filter dataset
 # recurrent = no; validated = si
@@ -47,7 +60,8 @@ df<-df %>%
 
 # Get adm4 name to location
 df<-df %>% 
-  mutate(!!sym(location):= ifelse(is.na(!!sym(location)),adm4.code, !!sym(location)))
+  mutate(!!sym(location):= ifelse(!is.na(!!sym(adm4.code)), !!sym(adm4.code), !!sym(location)))
+  # mutate(!!sym(location):= ifelse(is.na(!!sym(location)),adm4.code, !!sym(location)))
 
 # Convert columns to numeric class
 df<-df %>%
@@ -56,11 +70,12 @@ df<-df %>%
 
 # Create dataset with only activities in schools
 # df.school <- df %>% filter(tolower(get(col.loc.type)) == 'escuela o centro educativo') 
-
-
+df<-data_name_tolower_remove_space_dots(df,location)
+location <- 'name_check'
 # ANALYSE -----------------------------------------------------------------
 
 # INDICATOR 1.1 -------------------------------------------------------------
+# 1.1: # de niñas, niños y adolescentes de 3 a 17 años dentro y fuera de la escuela que participan de programas de educación alternativa
 # 1.01+1.02+1.03+1.05
 
 name.act <- unlist((indicators %>% filter(indicator == indicators.list[1, "indicator"]) %>% select(number_activity)))
@@ -76,6 +91,10 @@ ind.11 <- calculate_sum(data = df,
 ind.11<- ind.11 %>% 
   mutate(indicator = unique(name.ind),.before = 1)
 
+# # replace with 0 ages not in the range f the activity
+# ind.11t <- ind.11 %>%
+#   mutate_at(vars(all_of(c(age.adult,age.0.2))),~0)
+
 
 # INDICATOR 1.2 -------------------------------------------------------------
 # Por escuela: Max(1.06,1.07)
@@ -84,7 +103,7 @@ name.act <- unlist((indicators %>% filter(indicator == indicators.list[2, "indic
 name.ind <- unique(unlist((indicators %>% filter(indicator == indicators.list[2, "indicator"]) %>% select(indicator))))
 
 # get max value for each disaggregation group at location level
-temp <-calculate_max(data = df, activity = name.act, aggregation = c(adm.level[[3]],location), targets_summarise = c(col.reach.type, col.reach.disagg))
+temp <-calculate_max(data = df, activity = name.act, aggregation = c(adm.level[[3]],col.location.type,location), targets_summarise = c(col.reach.type, col.reach.disagg))
 # temp <- distinct(temp, across(all_of(c(adm.level,location))), .keep_all = TRUE)
 
 # Calculate aggregation at adm level
@@ -104,7 +123,7 @@ name.act <- unlist((indicators %>% filter(indicator == indicators.list[3, "indic
 name.ind <- unique(unlist((indicators %>% filter(indicator == indicators.list[3, "indicator"]) %>% select(indicator))))
 
 # Calculate the max value by location (in school or others)
-temp <-calculate_max(data = df, activity = name.act, aggregation = c(adm.level[[3]],location), targets_summarise = c(col.reach.type, col.reach.disagg))
+temp <-calculate_max(data = df, activity = name.act, aggregation = c(adm.level[[3]],col.location.type,location), targets_summarise = c(col.reach.type, col.reach.disagg))
 
 # Calculate aggregation at adm level
 ind.13 <- calculate_sum(data = temp,
@@ -117,13 +136,14 @@ ind.13 <-ind.13 %>%
 
 
 # INDICATOR 2.1 -----------------------------------------------------------
+# 2.1: # de docentes y otro personal educativo que participan de programas de formación docente continua
 # Por escuela:    Max(2.01 a 2.08,2.10,2.13,2.14)
 
 name.act <- unlist((indicators %>% filter(indicator == indicators.list[4, "indicator"]) %>% select(number_activity)))
 name.ind <- unique(unlist((indicators %>% filter(indicator == indicators.list[4, "indicator"]) %>% select(indicator))))
 
 # Calculate the max value by location (in school or others)
-temp <-calculate_max(data = df, activity = name.act, aggregation = c(adm.level[[3]],location), targets_summarise = c(col.reach.type, col.reach.disagg))
+temp <-calculate_max(data = df, activity = name.act, aggregation = c(adm.level[[3]],col.location.type,location), targets_summarise = c(col.reach.type, col.reach.disagg))
 
 # Calculate aggregation at adm level
 ind.21 <- calculate_sum(data = temp,
@@ -150,7 +170,7 @@ temp.sum<- calculate_sum(data = df,
 
 # Calculate max out of selected indicators by location
 max.act <- c('2.09', '2.10', '2.11')
-temp.max <-calculate_max(data = df, activity = max.act, aggregation = c(adm.level[[3]],location), targets_summarise = c(col.reach.type, col.reach.disagg))
+temp.max <-calculate_max(data = df, activity = max.act, aggregation = c(adm.level[[3]],col.location.type,location), targets_summarise = c(col.reach.type, col.reach.disagg))
 
 # Bind datasets
 temp <- bind_rows(temp.sum, temp.max)
@@ -175,13 +195,13 @@ name.ind <- unique(unlist((indicators %>% filter(indicator == indicators.list[6,
 
 # Calculate max out of selected indicators
 max.act <- c('3.01', '3.04')
-temp.max.student <- calculate_max(data = df, activity = max.act, aggregation = c(adm.level[[3]],location), targets_summarise = c(col.reach.type, col.reach.disagg))
+temp.max.student <- calculate_max(data = df, activity = max.act, aggregation = c(adm.level[[3]],col.location.type,location), targets_summarise = c(col.reach.type, col.reach.disagg))
 
 max.act <- c('3.03', '3.05')
-temp.max.teacher <- calculate_max(data = df, activity = max.act, aggregation = c(adm.level[[3]],location), targets_summarise = c(col.reach.type, col.reach.disagg))
+temp.max.teacher <- calculate_max(data = df, activity = max.act, aggregation = c(adm.level[[3]],col.location.type,location), targets_summarise = c(col.reach.type, col.reach.disagg))
 
 max.act <- c('3.02', '3.06')
-temp.max.school <- calculate_max(data = df, activity = max.act, aggregation = c(adm.level[[3]],location), targets_summarise = c(col.reach.type, col.reach.disagg))
+temp.max.school <- calculate_max(data = df, activity = max.act, aggregation = c(adm.level[[3]],col.location.type,location), targets_summarise = c(col.reach.type, col.reach.disagg))
 
 # Bind datasets
 temp <- bind_rows(temp.max.student, temp.max.teacher, temp.max.school)
@@ -204,7 +224,7 @@ name.act <- unlist((indicators %>% filter(indicator == indicators.list[7, "indic
 name.ind <- unique(unlist((indicators %>% filter(indicator == indicators.list[7, "indicator"]) %>% select(indicator))))
 
 # Get max value by location in schools
-temp <-calculate_max(data = df, activity = name.act, aggregation = c(adm.level[[3]],location),targets_summarise = c(col.reach.type, col.reach.disagg))
+temp <-calculate_max(data = df, activity = name.act, aggregation = c(adm.level[[3]],col.location.type,location),targets_summarise = c(col.reach.type, col.reach.disagg))
 
 # Aggregate at adm level
 # Calculate total
@@ -228,14 +248,14 @@ name.ind <- unique(unlist((indicators %>% filter(indicator == indicators.list[8,
 sum.act<- c('1.02','1.03','1.05')
 temp <- calculate_sum(data = df,
                       activity = sum.act,
-                      aggregation = c(col.activity,adm.level[[3]], location),
+                      aggregation = c(col.activity,adm.level[[3]], col.location.type,location),
                       targets_summarise = c(col.reach.type,col.reach.disagg))
 
 # add to main dataset
 temp <- bind_rows(temp, df)
 
 # Calculate Max(sum, 1.08, 1.09, 1.10,3.01) at location level
-temp <-calculate_max(data = temp, activity = name.act, aggregation = c(adm.level[[3]],location),targets_summarise = c(col.reach.type, col.reach.disagg))
+temp <-calculate_max(data = temp, activity = name.act, aggregation = c(adm.level[[3]],col.location.type,location),targets_summarise = c(col.reach.type, col.reach.disagg))
 
 # Aggregate at adm level
 # Calculate total
@@ -250,7 +270,7 @@ ind.anos.6.11 <-ind.anos.6.11 %>%
 
 
 # INDICATOR ENTRE 12 Y 17 ANOS --------------------------------------------
-# Max(1.02+1.03+1.05, 1.08, 1.09, 1.10,2.10,2.11,3.01)
+# Max(1.02+1.03+1.05, 1.06, 1.07, 1.08, 1.09, 1.10,2.10,2.11,3.01)
 
 name.act <- unlist((indicators %>% filter(indicator == indicators.list[9, "indicator"]) %>% select(number_activity)))
 name.ind <- unique(unlist((indicators %>% filter(indicator == indicators.list[9, "indicator"]) %>% select(indicator))))
@@ -259,14 +279,14 @@ name.ind <- unique(unlist((indicators %>% filter(indicator == indicators.list[9,
 sum.act<- c('1.02','1.03','1.05')
 temp <- calculate_sum(data = df,
                       activity = sum.act,
-                      aggregation = c(adm.level[[3]], location),
+                      aggregation = c(adm.level[[3]], col.location.type,location),
                       targets_summarise = c(col.reach.type, col.reach.disagg))
 
 # add to main dataset
 temp <- bind_rows(temp, df)
 
 # Calculate Max(sum, 1.08, 1.09, 1.10,2.10,2.11,3.01) at location level
-temp <-calculate_max(data = temp, activity = name.act, aggregation = c(adm.level[[3]],location),targets_summarise = c(col.reach.type, col.reach.disagg))
+temp <-calculate_max(data = temp, activity = name.act, aggregation = c(adm.level[[3]],col.location.type,location),targets_summarise = c(col.reach.type, col.reach.disagg))
 
 # Aggregate at adm level
 # Calculate total
@@ -288,12 +308,12 @@ name.ind <- unique(unlist((indicators %>% filter(indicator == indicators.list[10
 # Calculate Max(2.01 a 2.08,2.10,2.13,2.14) at location level
 max.act<- c('2.01','2.02','2.03','2.04','2.05','2.06','2.07','2.08',
             '2.10', '2.13','2.14')
-temp.max1 <- calculate_max(data = df, activity = max.act, aggregation = c(adm.level[[3]],location), targets_summarise = c(col.reach.type, col.reach.disagg))
+temp.max1 <- calculate_max(data = df, activity = max.act, aggregation = c(adm.level[[3]],col.location.type,location), targets_summarise = c(col.reach.type, col.reach.disagg))
 
 
 # Calculate Max(2.09, 2.10,2.11) at location level
 max.act<- c('2.09','2.10','2.11')
-temp.max2 <- calculate_max(data = df, activity = max.act, aggregation = c(adm.level[[3]],location), targets_summarise = c(col.reach.type, col.reach.disagg))
+temp.max2 <- calculate_max(data = df, activity = max.act, aggregation = c(adm.level[[3]],col.location.type,location), targets_summarise = c(col.reach.type, col.reach.disagg))
 # temp.max2 <- distinct(temp.max2, across(all_of(c(adm.level,location))), .keep_all = TRUE)
 
 # bind datasets
@@ -398,17 +418,51 @@ df.adm3 <- calculate_percentage(arrange_data(bind_rows(oe.adm3, ind.adm3), adm.l
   filter(!desagregacion %in% c('#reached+f+elderly', '#reached+m+elderly')) %>% 
   select(all_of(adm.level[[3]]), everything())
 
-t.adm0 <- calculate_percentage_target(arrange_data_target(target.adm0,adm.level = adm0), adm.level = adm0) %>% filter(!desagregacion %in% c('#reached+f+elderly', '#reached+m+elderly'))
-t.adm1 <- calculate_percentage_target(arrange_data_target(target.adm1,adm.level = adm.level[[1]]), adm.level = adm.level[[1]]) %>% filter(!desagregacion %in% c('#reached+f+elderly', '#reached+m+elderly'))
-t.adm2 <- calculate_percentage_target(arrange_data_target(target.adm2,adm.level = adm.level[[2]]), adm.level = adm.level[[2]]) %>% filter(!desagregacion %in% c('#reached+f+elderly', '#reached+m+elderly'))
-t.adm3 <- calculate_percentage_target(arrange_data_target(target.adm3,adm.level = adm.level[[3]]), adm.level = adm.level[[3]]) %>% filter(!desagregacion %in% c('#reached+f+elderly', '#reached+m+elderly'))
+t.adm0 <- calculate_percentage_target(arrange_data_target(target.adm0,adm.level = adm0), adm.level = adm0) #%>% filter(!desagregacion %in% c('#reached+f+elderly', '#reached+m+elderly'))
+t.adm1 <- calculate_percentage_target(arrange_data_target(target.adm1,adm.level = adm.level[[1]]), adm.level = adm.level[[1]]) #%>% filter(!desagregacion %in% c('#reached+f+elderly', '#reached+m+elderly'))
+t.adm2 <- calculate_percentage_target(arrange_data_target(target.adm2,adm.level = adm.level[[2]]), adm.level = adm.level[[2]]) #%>% filter(!desagregacion %in% c('#reached+f+elderly', '#reached+m+elderly'))
+t.adm3 <- calculate_percentage_target(arrange_data_target(target.adm3,adm.level = adm.level[[3]]), adm.level = adm.level[[3]]) #%>% filter(!desagregacion %in% c('#reached+f+elderly', '#reached+m+elderly'))
 
+
+# ADD LABELS --------------------------------------------------------------
+df.adm0<- df.adm0%>% 
+  left_join(name_labels) %>%
+  select(adm0,"indicator","descripcion","personas","total_personas","personas_pct") %>% 
+  rename("desagregación" = "descripcion",
+         "indicador" = "indicator")
+
+df.adm1 <- df.adm1 %>% 
+  left_join(name_labels) %>%
+  select(adm.level[[1]],"indicator","descripcion","personas","total_personas","personas_pct") %>% 
+  rename("desagregación" = "descripcion",
+         "indicador" = "indicator")
+
+df.adm2 <- df.adm2 %>% 
+  left_join(name_labels) %>%
+  select(adm.level[[2]],"indicator","descripcion","personas","total_personas","personas_pct") %>% 
+  rename("desagregación" = "descripcion",
+         "indicador" = "indicator")
+
+t.adm0 <- t.adm0 %>% 
+  left_join(name_labels) %>%
+  select(adm0,"descripcion","personas","total_personas","personas_pct") %>% 
+  rename("desagregacion" = "descripcion")
+
+t.adm1 <- t.adm1 %>% 
+  left_join(name_labels) %>%
+  select(adm.level[[1]],"descripcion","personas","total_personas","personas_pct") %>% 
+  rename("desagregacion" = "descripcion")
+
+t.adm2 <- t.adm2 %>% 
+  left_join(name_labels) %>%
+  select(adm.level[[2]],"descripcion","personas","total_personas","personas_pct") %>% 
+  rename("desagregacion" = "descripcion")
 
 # EXPORT ------------------------------------------------------------------
 
 # Create list of dataframes
 df_list <- list(
-  # 'DATA' = df,
+  'DATA' = df,
   'adm0_target' = t.adm0,
   'adm0_ind_obj' = df.adm0,
   
@@ -440,6 +494,6 @@ write.xlsx(df_list, paste0('./02_output/',output,'.xlsx'), colWidths=20,  header
 # Ocha
 # Write each dataframe to a separate sheet in the Excel workbook
 write_xlsx(
-  target.adm1 %>% select(all_of(c(adm.level[[1]],col.reached,col.totals))),
+  target.adm2 %>% select(all_of(c(adm.level[[2]],col.reached,col.totals))),
   path = paste0('./02_output/',output.ocha,'.xlsx')
 )
