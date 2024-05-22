@@ -462,7 +462,7 @@ t.adm2 <- t.adm2 %>%
 
 # Create list of dataframes
 df_list <- list(
-  'DATA' = df,
+  'DATA' = df %>% select(-name_check),
   'adm0_target' = t.adm0,
   'adm0_ind_obj' = df.adm0,
   
